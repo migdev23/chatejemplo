@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <style>
+        body {
+            background: lightblue;
+            padding: 10px;
+            margin: 0px;
+        }
+
+        button, select {
+            padding: 10px;
+            border: none;
+            color: white;
+            background: rgb(58, 108, 124);
+            box-shadow: 0px 0px 7px rgb(58, 108, 124);
+            cursor: pointer;
+            border-radius: 3px;
+        }
+
+
+
+        input {
+            padding: 10px;
+            width: 300px;
+            margin: 10px 0px;
+        }
+
+        h2 {
+            color: rgb(58, 108, 124);
+            font-family: 'Gill Sans', 'Gill Sans MT', Calibri, 'Trebuchet MS', sans-serif;
+            text-transform: uppercase;
+        }
+
+        span {
+            display: inline-block;
+            color: white;
+            background: rgb(58, 108, 124);
+            box-shadow: 0px 0px 7px rgb(58, 108, 124);
+            margin-right: 10px;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        span button {
+            color: red;
+            font-size: 19px;
+            font-weight: bold;
+        }
+
+
+        #mensajesGrupos {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-gap: 10px;
+
+        }
+
+        #mensajesGrupos .sala {
+            box-shadow: 0px 0px 7px rgb(58, 108, 124);
+            min-height: 90px;
+            background: white;
+            padding-bottom: 10px;
+        }
+
+        #mensajesGrupos .sala h3 {
+            margin: 0px;
+            margin-bottom: 5px;
+            padding: 5px 0px;
+            color: white;
+            background: rgb(58, 108, 124);
+            text-align: center;
+        }
+
+        #mensajesGrupos .sala .mensajeSala{
+          padding: 5px;
+        }
+
+    </style>
+</head>
+
+<body>
+
+    <div>
+        <h2>Salas a las que pertenezco</h2>
+        <input type="text" id="inputUnirseSala" placeholder="Introduce el nombre de la sala">
+        <button id="unirseSala">Unirse</button>
+        <div id="salasUnidos">
+            <span>No estas unido a ninguna sala</span>
+        </div>
+    </div>
+
+    <div>
+        <h2>Mandar Mensaje</h2>
+        <input type="text" id="mensajeMandar" placeholder="Introduce el mensaje a Mandar">
+        <button id="mandarBroadcast">Mandar Global</button>
+        <select id="selectGrupo">
+            <option value="">Mandar Grupo</option>
+        </select>
+    </div>
+
+    <div>
+        <h2>Mensajes</h2>
+        <div id="mensajesGrupos">
+            <div class='sala' id='broadcast'>
+                <h3><strong>Sala:</strong> Global</h3>
+            </div>
+        </div>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+
+    <script>
+
+        //DOM
+        const inputSala = document.querySelector('#inputUnirseSala');
+        const salasUnidos = document.querySelector('#salasUnidos');
+        const inputMensajeMandar = document.querySelector('#mensajeMandar');
+        const btnUnirseSala = document.querySelector('#unirseSala')
+        const btnMandarBroadcast = document.querySelector('#mandarBroadcast')
+        const selectGrupo = document.querySelector('#selectGrupo');
+        const mensajesGrupos = document.querySelector('#mensajesGrupos');
+
+        let groups = [];
+        const server = io();
+
+        const salirSala = (eventoSalirSala) => {
+            const elementSpan = eventoSalirSala.target.parentNode;
+            const nombreSala = elementSpan.innerText.slice(0, -1); 
+            groups = groups.filter((element) => element != nombreSala);
+            server.emit('salirGrupo', nombreSala);
+            elementSpan.remove();
+            if(salasUnidos.querySelectorAll('span').length == 0)
+                salasUnidos.innerHTML = '<span>No estas unido a ninguna sala</span>';
+            
+            if (document.querySelector(`#s${nombreSala}`))
+                document.querySelector(`#s${nombreSala}`).remove();
+
+            actualizarOptionsSelectGrupos();
+            
+        }
+
+        const generatorSpanGropButtonExit = (textSpan) => {
+            const button = document.createElement('button');
+            const span = document.createElement('span');
+            button.append('x')
+            span.append(`${textSpan}`);
+            span.append(button);
+
+            button.addEventListener('click', (e) => salirSala(e));
+
+            return span;
+        }
+
+        const añadirMensajeSala = (sala, mensaje, broadcast = false) => {
+            if (!broadcast) {
+                if (!document.querySelector(`#s${sala}`)) {
+                    mensajesGrupos.innerHTML += `<div class='sala' id='s${sala}'><h3><strong>Sala:</strong> ${sala}</h3></div>`
+                }
+
+                document.querySelector(`#s${sala}`).innerHTML += `<div class='mensajeSala'><strong>Mensaje:<strong>${mensaje}</div>`
+            }else{
+                document.querySelector(`#broadcast`).innerHTML += `<div class='mensajeSala'><strong>Mensaje:<strong>${mensaje}</div>`
+            }
+
+        }
+
+        const actualizarOptionsSelectGrupos = () => {
+            selectGrupo.innerHTML = '<option value="">Mandar Grupo</option>'
+            groups.forEach(element => {
+                selectGrupo.innerHTML += `<option value="${element}">${element}</option>`
+            });
+        }
+
+        btnUnirseSala.addEventListener('click', () => {
+            if (inputSala.value.length > 0
+                && !groups.includes(inputSala.value)) {
+
+                server.emit('unirseGrupo', inputSala.value);
+
+                //A la escucha de esta sala (cuando nos escriban pasara por aqui)
+                server.on(inputSala.value, ({ mensaje, sala }) => {
+                    añadirMensajeSala(sala, mensaje)
+                });
+
+                if (groups.length != 0) {
+                    salasUnidos.append(generatorSpanGropButtonExit(inputSala.value))
+                } else {
+                    salasUnidos.innerHTML = '';
+                    salasUnidos.append(generatorSpanGropButtonExit(inputSala.value))
+                }
+
+                groups.push(inputSala.value);
+
+                actualizarOptionsSelectGrupos();
+
+            }
+
+            inputSala.value = ""
+        });
+
+
+        btnMandarBroadcast.addEventListener('click', () => {
+            server.emit('mandarBroadCast', inputMensajeMandar.value);
+        });
+
+        selectGrupo.addEventListener('change', () => {
+            const salaSelect = selectGrupo.value;
+
+            if(salaSelect != ''){
+                server.emit('mandarGrupo', JSON.stringify({ sala: salaSelect, mensaje: inputMensajeMandar.value }));
+                if (groups.includes(salaSelect)) {
+                    añadirMensajeSala(salaSelect, inputMensajeMandar.value);
+                }   
+            }
+            selectGrupo.value = "";
+        });
+
+        server.on('broadcast', (message) => {
+            añadirMensajeSala(null, message, true)
+        });
+
+
+
+    </script>
+</body>
+
+</html>
